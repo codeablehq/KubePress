@@ -5,7 +5,7 @@
 version: '2'
 services:
   wordpress:
-    image: codeablehq/wordpress:4.7.3
+    image: codeablehq/kubepress:4.7.3
     volumes:
       - ./wp-content:/var/www/wordpress/wp-content
     env_file: .env

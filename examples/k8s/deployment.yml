@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: wordpress
-        image: codeablehq/wordpress:4.7.3
+        image: codeablehq/kubepress:4.7.3
         ports:
         - name: http
           containerPort: 80

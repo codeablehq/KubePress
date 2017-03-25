@@ -1,4 +1,4 @@
-# WordPress for Docker/Kubernetes
+# KubePress: WordPress image for Docker/Kubernetes
 
 This is a 12-factor-ready WordPress image that is infinitely horizontally scaleable, meaning you can have as many servers (called _nodes_ in Kubernetes) with as many pods (containers) running.
 
