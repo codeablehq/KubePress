@@ -1,0 +1,57 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: wordpress
+spec:
+  replicas: 1
+  minReadySeconds: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 50%
+      maxSurge: 150%
+  template:
+    metadata:
+      labels:
+        name: wordpress
+    spec:
+      containers:
+      - name: wordpress
+        image: codeablehq/wordpress:4.7.3
+        ports:
+        - name: http
+          containerPort: 80
+        env:
+        - name: DB_NAME
+          value: wordpress_database
+        - name: DB_USER
+          value: wordpress_user
+        - name: DB_HOST
+          value: 1.2.3.4
+        - name: DB_CHARSET
+          value: utf8
+        - name: DB_COLLATE
+          value: ''
+        - name: SECRETS_PATH
+          value: /var/secrets
+        volumeMounts:
+        - name: glusterfs
+          mountPath: /var/www/wordpress/wp-content
+        - name: secrets
+          readOnly: true
+          mountPath: /var/secrets
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          timeoutSeconds: 1
+      volumes:
+      - name: glusterfs
+        glusterfs:
+          endpoints: glusterfs
+          path: /wp-content
+          readOnly: false
+      - name: secrets
+        secret:
+          secretName: wordpress-secrets

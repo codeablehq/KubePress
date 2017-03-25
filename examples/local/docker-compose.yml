@@ -1,0 +1,28 @@
+# This is a development helper so we don't need to constantly
+# manage all the moving parts with long docker commands
+# To build this image, run `$ docker-compose build`
+# To run this image locally, run `$ docker-compose up`
+version: '2'
+services:
+  wordpress:
+    image: codeablehq/wordpress:4.7.3
+    volumes:
+      - ./wp-content:/var/www/wordpress/wp-content
+    env_file: .env
+    dns: 8.8.8.8
+    ports:
+      - "80:80"
+    links:
+      - mysql
+
+  mysql:
+    image: mariadb:10.1.22
+    volumes:
+      - ./mysql:/var/lib/mysql
+      # Uncomment the following line if you want to import an existing database
+      # - ./sql:/docker-entrypoint-initdb.d
+    environment:
+      MYSQL_ROOT_PASSWORD: wordpress
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wordpress
+      MYSQL_PASSWORD: wordpress

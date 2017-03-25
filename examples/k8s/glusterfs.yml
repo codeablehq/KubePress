@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: glusterfs
+subsets:
+- addresses:
+  # Change the following value to reflect your glusterfs servers
+  - ip: 10.0.0.1
+  - ip: 10.0.0.2
+  ports:
+  - port: 1
+    protocol: TCP

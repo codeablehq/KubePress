@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: wordpress-service
+spec:
+  # If you want to expose WordPress without an ingress, uncomment the next line.
+  # type: LoadBalancer
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    name: wordpress
