@@ -59,18 +59,35 @@ General rule of thumb whether a configuration value should be a secret is that y
 
 ## Sending emails
 
-This image also comes with `postfix` MTA (mail transfer agent) installed, since the default WordPress install is capable of sending emails. While the default configuration might work on your local development machine, it will most likely fail in production - the reason being most of cloud providers block the default port (25) to fight spam.
+Docker images are supposed to be as light-weight (and with limited responsibilities) as possible, which is why this image comes with a very basic `sendmail` installation, which will not work on it's own - you need to provide a mail relay to send emails, like Google's SMTP server. To get emails working, create a file `wp-content/mu-plugins/smtp-config.php` and put the following code in it:
 
-That's why you're strongly encouraged to set the following environment variables:
+```
+<?php
 
-- `SMTP_DOMAIN` - the domain you send emails from
-- `SMTP_HOSTNAME` - server's hostname (can be the same as domain)
-- `SMTP_SERVER` - email provider's server (Mandrill, Sendgrid, Mailgun, etc)
-- `SMTP_USERNAME` - username/email for the email provider
-- `SMTP_PASSWORD` - should be in _secrets_!
-- `SMTP_PORT` - port for the email provider
+defined( 'ABSPATH' ) or die( 'Please don\'t access this file directly.' );
 
-You can find the last four values in your email provider's documentation.
+/**
+ * If the emails are still not sent properly, despite these settings
+ * being set, visit https://myaccount.google.com/security and turn
+ * on "Allow less secure apps". In any case, it's recommended to
+ * create a separate email account for sending emails.
+ *
+ * You can either hard-code values in this file or provide them
+ * via environment variables.
+ */
+
+add_action('phpmailer_init', 'smtp_config');
+
+function smtp_config($phpmailer) {
+  $phpmailer->isSMTP();
+  $phpmailer->Host = 'smtp.gmail.com';
+  $phpmailer->SMTPAutoTLS = true;
+  $phpmailer->SMTPAuth = true;
+  $phpmailer->Port = 587;
+  $phpmailer->Username = $_ENV['SMTP_EMAIL'];
+  $phpmailer->Password = $_ENV['SMTP_PASSWORD'];
+}
+```
 
 ## Your own Nginx virtual hosts
 
@@ -85,6 +102,9 @@ Many developers that use containers on a daily basis believe that each container
 - `wp-config.php` is locked and can't be modified. Some plugins want to `define` variables for their operation. In such cases, just set the environment variable yourself (see [deployment example](examples/k8s/deployment.yml`)).
 - Some plugins (like WordFence) require files in WordPress root directory. Normally this is not a problem since those files can be safely moved into `wp-content` (which is shared among containers), just pay attention to file paths in those files.
 - If you require additional/different php settings, feel free to pass those settings in Nginx config, like `fastcgi_param PHP_VALUE "auto_prepend_file=/var/www/wordpress/wp-content/wordfence-waf.php";` for example with WordFence.
+
+## TODO:
+- implement a proper init system ([s6](https://skarnet.org/software/s6/)/[runit](smarden.org/runit/))
 
 ---
 This project, developed by [Codeable](https://codeable.io), is published under MIT License.

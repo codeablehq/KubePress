@@ -5,17 +5,13 @@ MAINTAINER Tomaz Zaman <tomaz@codeable.io>
 RUN apk add --no-cache \
     bash \
     curl-dev \
-    imagemagick-dev \
+    imagemagick \
     libpng-dev \
     libxml2-dev \
-    mailx \
-    mysql-client \
     nginx \
     openssl \
-    postfix \
     redis \
-    supervisor \
-    syslog-ng
+    supervisor
 
 # Set up some useful environment variables
 ENV WP_ROOT /var/www/wordpress
@@ -31,7 +27,7 @@ WORKDIR /var/www/wordpress/wp-content
 
 # Install the necessary php libraries and extensions to run the most common
 # WordPress plugins and functionality (like image manipulation with ImageMagick)
-RUN apk add --no-cache libtool build-base autoconf \
+RUN apk add --no-cache libtool build-base autoconf imagemagick-dev \
     && export CFLAGS="-I/usr/src/php" \
     && docker-php-ext-install \
       -j$(grep -c ^processor /proc/cpuinfo 2>/dev/null) \
@@ -40,7 +36,7 @@ RUN apk add --no-cache libtool build-base autoconf \
       gd mbstring xmlreader xmlwriter ftp mysqli opcache sockets \
     && pecl install imagick \
     && docker-php-ext-enable imagick \
-    && apk del libtool build-base autoconf
+    && apk del libtool build-base autoconf imagemagick-dev
 
 # Download and extract WordPress into /var/www/wordpress
 RUN curl -o wordpress.tar.gz -SL $WP_DOWNLOAD_URL \
@@ -66,16 +62,8 @@ RUN chown -R wordpress:www-data $WP_ROOT \
 # Set proper ownership on Nginx's operational directories (for uploads)
 RUN chown -R www-data:www-data /var/lib/nginx
 
-# Copy all the configuration files in etc and usr into image root
-COPY etc /etc/
-COPY usr /usr/
-
-# Configure postfix
-RUN postconf inet_interfaces=localhost \
-    smtputf8_enable=no \
-    'myorigin=$mydomain' \
-    mail_spool_directory=/var/spool/mail \
-    mynetworks_style=class
+# Copy all the configuration files into image root
+COPY rootfs /
 
 # Set the entrypoint which reads all the secret files to runtime ENV vars
 ENTRYPOINT [ "docker-entrypoint.sh" ]
