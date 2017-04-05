@@ -1,0 +1,3 @@
+#!/bin/sh
+sv exit /service/*
+kill -HUP $(pidof runsvdir)

@@ -10,8 +10,7 @@ RUN apk add --no-cache \
     libxml2-dev \
     nginx \
     openssl \
-    redis \
-    supervisor
+    redis
 
 # Set up some useful environment variables
 ENV WP_ROOT /var/www/wordpress
@@ -36,6 +35,11 @@ RUN apk add --no-cache libtool build-base autoconf imagemagick-dev \
       gd mbstring xmlreader xmlwriter ftp mysqli opcache sockets \
     && pecl install imagick \
     && docker-php-ext-enable imagick \
+    # Build and install runit while we have the build-base package available
+    && mkdir /opt && wget -qO- http://smarden.org/runit/runit-2.1.2.tar.gz | tar xvz -C /opt \
+    && cd /opt/admin/runit-2.1.2 \
+    && ./package/install \
+    # Clean up
     && apk del libtool build-base autoconf imagemagick-dev
 
 # Download and extract WordPress into /var/www/wordpress
@@ -62,14 +66,22 @@ RUN chown -R wordpress:www-data $WP_ROOT \
 # Set proper ownership on Nginx's operational directories (for uploads)
 RUN chown -R www-data:www-data /var/lib/nginx
 
+# Install dumb-init, which we will use in place of Runit's PID 1
+# This is because Runit doesn't exit when done and doesn't handle TERM
+RUN echo http://dl-cdn.alpinelinux.org/alpine/edge/community \
+      >> /etc/apk/repositories \
+    && apk add --no-cache --update dumb-init
+
 # Copy all the configuration files into image root
 COPY rootfs /
-
-# Set the entrypoint which reads all the secret files to runtime ENV vars
-ENTRYPOINT [ "docker-entrypoint.sh" ]
 
 # We only expose port 80, but not 443. In a proper "containerized" manner
 # HTTPS should be handled by a separate Nginx container/reverse proxy
 EXPOSE 80
 
-CMD [ "/usr/bin/supervisord", "-c", "/etc/supervisord.conf" ]
+# If we want to mount secrets into the container, this is the directory
+# to mount them into and PHP will automatically pick them up
+VOLUME /etc/environment
+
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["runsvdir", "/service"]
