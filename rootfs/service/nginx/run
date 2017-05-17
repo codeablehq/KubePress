@@ -1,3 +1,0 @@
-#!/usr/bin/dumb-init /bin/sh
-sv -w5 check php-fpm
-exec nginx

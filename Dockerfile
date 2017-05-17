@@ -1,22 +1,45 @@
-FROM php:7.1.3-fpm-alpine
+FROM debian:jessie
 MAINTAINER Tomaz Zaman <tomaz@codeable.io>
 
-# Install necessary system dependencies
-RUN apk add --no-cache \
-    bash \
-    curl-dev \
-    imagemagick \
-    libpng-dev \
-    libxml2-dev \
-    nginx \
-    openssl \
-    redis
-
 # Set up some useful environment variables
+ENV DEBIAN_FRONTEND noninteractive
+
 ENV WP_ROOT /var/www/wordpress
-ENV WP_VERSION 4.7.3
-ENV WP_SHA1 35adcd8162eae00d5bc37f35344fdc06b22ffc98
+ENV WP_VERSION 4.7.5
+ENV WP_SHA1 fbe0ee1d9010265be200fe50b86f341587187302
 ENV WP_DOWNLOAD_URL https://wordpress.org/wordpress-$WP_VERSION.tar.gz
+
+RUN apt-get update && apt-get install -y \
+    apt-transport-https \
+    ca-certificates \
+    curl \
+    locales \
+    runit \
+    syslog-ng \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV LANGUAGE en_US.UTF-8
+ENV LANG en_US.UTF-8
+ENV LC_ALL en_US.UTF-8
+
+RUN echo "en_US.UTF-8 UTF-8" > /etc/locale.gen \
+    && locale-gen en_US.UTF-8
+
+RUN echo "deb http://nginx.org/packages/debian/ jessie nginx" > \
+      /etc/apt/sources.list.d/nginx.list \
+    && echo "deb https://packages.sury.org/php/ jessie main" > \
+      /etc/apt/sources.list.d/php.list \
+    && curl -vs http://nginx.org/keys/nginx_signing.key | apt-key add - \
+    && curl -o /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
+
+RUN apt-get update && apt-get install -y \
+    nginx imagemagick \
+    php7.1-fpm php7.1-mysqli php7.1-curl php7.1-gd php7.1-geoip php7.1-xml php7.1-xmlrpc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Temporary, until Docker's built-in init becomes more wide-spread
+ADD https://github.com/Yelp/dumb-init/releases/download/v1.2.0/dumb-init_1.2.0_amd64 /usr/bin/dumb-init
+RUN chmod +x /usr/bin/dumb-init
 
 # Since we want to be able to update WordPress seamlessly, we need to
 # declare a volume that is mounted in place of the default wp-content, so
@@ -24,23 +47,8 @@ ENV WP_DOWNLOAD_URL https://wordpress.org/wordpress-$WP_VERSION.tar.gz
 VOLUME /var/www/wordpress/wp-content
 WORKDIR /var/www/wordpress/wp-content
 
-# Install the necessary php libraries and extensions to run the most common
-# WordPress plugins and functionality (like image manipulation with ImageMagick)
-RUN apk add --no-cache libtool build-base autoconf imagemagick-dev \
-    && export CFLAGS="-I/usr/src/php" \
-    && docker-php-ext-install \
-      -j$(grep -c ^processor /proc/cpuinfo 2>/dev/null) \
-      # Extensions missing from this list are already compiled in by default
-      # http://wordpress.stackexchange.com/questions/42098
-      gd mbstring xmlreader xmlwriter ftp mysqli opcache sockets \
-    && pecl install imagick \
-    && docker-php-ext-enable imagick \
-    # Build and install runit while we have the build-base package available
-    && mkdir /opt && wget -qO- http://smarden.org/runit/runit-2.1.2.tar.gz | tar xvz -C /opt \
-    && cd /opt/admin/runit-2.1.2 \
-    && ./package/install \
-    # Clean up
-    && apk del libtool build-base autoconf imagemagick-dev
+# For convenience, set www-data to UID and GID 1000
+RUN groupmod -g 1000 www-data && usermod -u 1000 www-data
 
 # Download and extract WordPress into /var/www/wordpress
 RUN curl -o wordpress.tar.gz -SL $WP_DOWNLOAD_URL \
@@ -48,40 +56,23 @@ RUN curl -o wordpress.tar.gz -SL $WP_DOWNLOAD_URL \
     && tar -xzf wordpress.tar.gz -C $(dirname $WP_ROOT) \
     && rm wordpress.tar.gz
 
-RUN adduser -D wordpress -s /bin/bash -G www-data
-
-# For convenience, install wp-cli
-RUN curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar \
-    && chmod +x wp-cli.phar \
-    && mv wp-cli.phar /usr/local/bin/wp
+# Create an empty directory in which we can mount secrets
+VOLUME /etc/secrets
 
 # Copy our custom wp-config.php over. This is arguably the most important
 # part/trick, that makes WordPress container-friendly. Instead of hard-coding
 # configuraion, we just loop through all environment variables and define
 # them for use inside WordPress/PHP
 COPY wp-config.php $WP_ROOT
-RUN chown -R wordpress:www-data $WP_ROOT \
+RUN chown -R www-data:www-data $WP_ROOT \
     && chmod 640 $WP_ROOT/wp-config.php
 
-# Set proper ownership on Nginx's operational directories (for uploads)
-RUN chown -R www-data:www-data /var/lib/nginx
-
-# Install dumb-init, which we will use in place of Runit's PID 1
-# This is because Runit doesn't exit when done and doesn't handle TERM
-RUN echo http://dl-cdn.alpinelinux.org/alpine/edge/community \
-      >> /etc/apk/repositories \
-    && apk add --no-cache --update dumb-init
-
-# Copy all the configuration files into image root
 COPY rootfs /
 
 # We only expose port 80, but not 443. In a proper "containerized" manner
 # HTTPS should be handled by a separate Nginx container/reverse proxy
 EXPOSE 80
 
-# If we want to mount secrets into the container, this is the directory
-# to mount them into and PHP will automatically pick them up
-VOLUME /etc/environment
+ENTRYPOINT ["/usr/bin/dumb-init", "--"]
 
-ENTRYPOINT ["dumb-init", "--"]
-CMD ["runsvdir", "/service"]
+CMD ["runsvdir", "-P", "/etc/service"]

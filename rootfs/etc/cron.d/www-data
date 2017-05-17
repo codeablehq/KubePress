@@ -1,0 +1,7 @@
+# SMTP_POSTMASTER (this line will be replaced by cron run script)
+#
+# chpst is part of the runit package which exposes environment variables
+# http://smarden.org/runit/chpst.8.html
+# we run WP cron by root and switch to www-data with -m parameter which keeps
+# the environment variables
+*/5 * * * * www-data php /var/www/wordpress/wp-cron.php

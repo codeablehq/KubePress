@@ -1,2 +1,0 @@
-#!/usr/bin/dumb-init /bin/sh
-exec chpst -e /etc/environment php-fpm

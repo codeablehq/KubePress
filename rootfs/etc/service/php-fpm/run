@@ -1,0 +1,14 @@
+#!/bin/bash -e
+
+# Wait until syslog is up
+until [ -S /dev/log ]; do sleep 1; done
+
+# Export all the secrets for this file and the subsequent process to consume
+for file in /etc/secrets/* ; do
+  # turns my-special-secret into MY_SPECIAL_SECRET
+  key=$(basename "$file" | tr - _ | tr '[:lower:]' '[:upper:]')
+  value=$(cat $file)
+  export "$key=$value"
+done
+
+exec php-fpm7.1

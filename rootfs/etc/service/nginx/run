@@ -1,0 +1,6 @@
+#!/bin/bash -e
+
+# Wait until syslog is up
+until [ -S /dev/log ]; do sleep 1; done
+
+exec nginx

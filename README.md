@@ -46,12 +46,11 @@ The minimal set of environment variables you need to set for the image to run:
 
 Secrets are a special type of environment variables - ones that should not be stored in clear text, because they contain sensitive (or, you guessed it, _secret_) information.
 
-Minimal set of secrets that WordPress uses out of the box are keys, salts and nonces (`AUTH_KEY`, `NONCE_KEY`, `NONCE_SALT`,..) you see in the default installation, plus `DB_PASSWORD`.
+Minimal set of secrets that WordPress uses out of the box are keys, salts and nonces (`AUTH_KEY`, `NONCE_KEY`, `NONCE_SALT`,..) you see in the default installation, plus `DB_PASSWORD` and `SMTP_PASSWORD`.
 
 While it's perfectly fine to use the secrets as usual environment variables locally, they are huge security risk in production, especially since you'll be likely committing your code to a Git repository.
 
-Kubernetes exposes secrets to containers with a special directory (which you define where it should be mounted) so that each secret becomes a file and the contents of that file is the actual secret. Example: if you set secrets to be mounted into `/var/secrets` then your `db-password` will be available inside `/var/secrets/db-password`.
-That's why, this image comes with a startup script (inside [`usr/local/bin/docker-entrypoint.sh`](usr/local/bin/docker-entrypoint.sh#L10)) that loops through all the secrets files and exposes them as environment variables. For the script to work, you *must* set an environment variable `SECRETS_PATH` that points to the directory in which your secrets are mounted (see [`examples/k8s/deployment.yml`](examples/k8s/deployment.yml#L35)).
+Kubernetes exposes secrets to containers with a special directory so that each secret becomes a file and the contents of that file is the actual secret. Example: Set secrets to be mounted into `/etc/environment` then your `DB_PASSWORD` will be available inside `/etc/environment/DB_PASSWORD`. See [`examples/k8s/deployment.yml`](examples/k8s/deployment.yml#L35).
 
 General rule of thumb whether a configuration value should be a secret is that you wouldn't be comfortable committing it in a Git repository.
 
@@ -59,10 +58,28 @@ General rule of thumb whether a configuration value should be a secret is that y
 
 ## Sending emails
 
-Docker images are supposed to be as light-weight (and with limited responsibilities) as possible, which is why this image comes with a very basic `sendmail` installation, which will not work on it's own - you need to provide a mail relay to send emails, like Google's SMTP server. To get emails working, create a file `wp-content/mu-plugins/smtp-config.php` and put the following code in it:
+This image comes with an [Exim4](http://www.exim.org/) installation, which will work on it's own, but you will most likely have difficulties receiving this email because Exim's default port is `25` - one that most cloud providers block for spamming reasons. That's why you can provide the necessary information through environment variables that will reconfigure Exim to behave as a _smarthost_, one that connects to a proper email sending provider of your choice (such as SendGrid or Mandrill).
+
+The variables you can define are:
+- `SMTP_POSTMASTER` is the default _from_ address, highly recommended you set this one regardless if you use an external provider or not
+- `SMTP_DOMAN` is the main domain your WordPress runs on
+- `SMTP_HOST` is the email provider's server (such as `smtp.mandrillapp.com`)
+- `SMTP_PORT` is the email provider's server port (often `587`)
+- `SMTP_USERNAME` and `SMTP_PASSWORD` are the email provider's credentials
+
+
+Alternatively, you can also bypass Exim4 completely and configure WordPress to connect to an external provider directly, with a _must use plugin_. To get that up and running, create a file `wp-content/mu-plugins/smtp-config.php` and put the following code in it:
 
 ```
 <?php
+/**
+ * Plugin Name: SMTP Config
+ * Description: Uses an external provider to send emails from WordPress
+ * Author:      Tomaz Zaman
+ * Author URI:  https://codeable.io
+ * Version:     1.0
+ * Licence:     MIT
+ */
 
 defined( 'ABSPATH' ) or die( 'Please don\'t access this file directly.' );
 
@@ -84,7 +101,7 @@ function smtp_config($phpmailer) {
   $phpmailer->SMTPAutoTLS = true;
   $phpmailer->SMTPAuth = true;
   $phpmailer->Port = 587;
-  $phpmailer->Username = $_ENV['SMTP_EMAIL'];
+  $phpmailer->Username = $_ENV['SMTP_USERNAME'];
   $phpmailer->Password = $_ENV['SMTP_PASSWORD'];
 }
 ```
@@ -102,9 +119,6 @@ Many developers that use containers on a daily basis believe that each container
 - `wp-config.php` is locked and can't be modified. Some plugins want to `define` variables for their operation. In such cases, just set the environment variable yourself (see [deployment example](examples/k8s/deployment.yml`)).
 - Some plugins (like WordFence) require files in WordPress root directory. Normally this is not a problem since those files can be safely moved into `wp-content` (which is shared among containers), just pay attention to file paths in those files.
 - If you require additional/different php settings, feel free to pass those settings in Nginx config, like `fastcgi_param PHP_VALUE "auto_prepend_file=/var/www/wordpress/wp-content/wordfence-waf.php";` for example with WordFence.
-
-## TODO:
-- implement a proper init system ([s6](https://skarnet.org/software/s6/)/[runit](smarden.org/runit/))
 
 ---
 This project, developed by [Codeable](https://codeable.io), is published under MIT License.

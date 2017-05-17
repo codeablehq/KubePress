@@ -1,0 +1,58 @@
+#!/bin/bash -e
+
+# Export all the secrets for this file and the subsequent process to consume
+for file in /etc/secrets/* ; do
+  # turns my-special-secret into MY_SPECIAL_SECRET
+  key=$(basename "$file" | tr - _ | tr '[:lower:]' '[:upper:]')
+  value=$(cat $file)
+  export "$key=$value"
+done
+
+echo "${SMTP_DOMAIN:-local.dev}" > /etc/mailname
+
+conf='/etc/exim4/update-exim4.conf.conf'
+
+# All possible values to configure Exim4 can be found here:
+# http://manpages.ubuntu.com/manpages/xenial/man8/update-exim4.conf.8.html
+declare -A opts=(
+  [dc_local_interfaces]='0.0.0.0'
+  [dc_other_hostnames]="$SMTP_HOSTNAMES"
+  [dc_relay_nets]="$(ip addr show dev eth0 | awk '$1 == "inet" { print $2 }')"
+)
+
+if [ "$SMTP_HOST" ]; then
+  opts+=(
+    [dc_eximconfig_configtype]='smarthost'
+    [dc_smarthost]="$SMTP_HOST::${SMTP_PORT:-587}"
+  )
+
+  if [ -z "${SMTP_USERNAME+x}" ]; then
+    echo >&2 'Error: Missing SMTP username and/or password'
+    exit 1
+  else
+    echo "*:$SMTP_USERNAME:$SMTP_PASSWORD" > /etc/exim4/passwd.client
+  fi
+else
+  opts+=(
+    [dc_eximconfig_configtype]='internet'
+  )
+fi
+
+for key in "${!opts[@]}"; do
+  value=${opts[$key]}
+
+  if ! grep -qE "${key}=" "$conf"; then
+    echo >&2 "Error: Key '${key}' not found in $conf"
+    exit 1
+  fi
+
+  # Just replace the whole line on which the keyword is found
+  sed -i "/$key/c $key='$value'" $conf
+done
+
+# Remove IPV6 support, otherwise most of the providers will report errors
+# echo "disable_ipv6 = true" >> /etc/exim4/exim4.conf.template
+
+update-exim4.conf -v
+
+exec exim4 -bdf -q30m

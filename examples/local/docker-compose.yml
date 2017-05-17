@@ -5,7 +5,7 @@
 version: '2'
 services:
   wordpress:
-    image: codeablehq/kubepress:4.7.3
+    image: codeablehq/kubepress:4.7.5
     volumes:
       - ./wp-content:/var/www/wordpress/wp-content
     env_file: .env
@@ -19,8 +19,9 @@ services:
     image: mariadb:10.1.22
     volumes:
       - ./mysql:/var/lib/mysql
-      # Uncomment the following line if you want to import an existing database
-      # - ./sql:/docker-entrypoint-initdb.d
+      # Comment out next line if you don't want to import an existing database.
+      # Should be used on first run only.
+      - ./sql:/docker-entrypoint-initdb.d
     environment:
       MYSQL_ROOT_PASSWORD: wordpress
       MYSQL_DATABASE: wordpress

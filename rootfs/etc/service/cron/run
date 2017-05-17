@@ -1,0 +1,13 @@
+#!/bin/bash -e
+
+# Wait until syslog is up
+until [ -S /dev/log ]; do sleep 1; done
+
+# Because cron reads /etc/environment on run
+chpst -e /etc/secrets printenv > /etc/environment
+
+if [ "$SMTP_POSTMASTER" ]; then
+  sed -i "/SMTP_POSTMASTER/c MAILTO=$SMTP_POSTMASTER" /etc/cron.d/www-data
+fi
+
+exec cron -f
